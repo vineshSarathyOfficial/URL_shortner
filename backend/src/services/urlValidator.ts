@@ -71,50 +71,61 @@ function validateUrlFormat(url: string): URL {
 }
 
 export async function checkReachability(url: string): Promise<void> {
-  let current = validateUrlFormat(url);
-  let redirectCount = 0;
+  try {
+    let current = validateUrlFormat(url);
+    let redirectCount = 0;
 
-  while (true) {
-    await resolveAndCheck(current.hostname);
+    while (true) {
+      await resolveAndCheck(current.hostname);
 
-    const response = await request(current.toString(), {
-      method: 'HEAD',
-      headers: { 'User-Agent': 'URLShortener-Validator/1.0' },
-      headersTimeout: config.urlValidationTimeout,
-      bodyTimeout: config.urlValidationTimeout,
-    });
-
-    let statusCode = response.statusCode;
-
-    if (statusCode === 405 || statusCode === 501) {
-      const getResponse = await request(current.toString(), {
-        method: 'GET',
+      const response = await request(current.toString(), {
+        method: 'HEAD',
         headers: { 'User-Agent': 'URLShortener-Validator/1.0' },
         headersTimeout: config.urlValidationTimeout,
         bodyTimeout: config.urlValidationTimeout,
       });
-      statusCode = getResponse.statusCode;
-      await getResponse.body.dump();
-    } else {
-      await response.body.dump();
-    }
 
-    if ([301, 302, 303, 307, 308].includes(statusCode)) {
-      redirectCount++;
-      if (redirectCount > config.urlValidationRedirectLimit) {
-        throw new AppError('DESTINATION_UNREACHABLE', 'Too many redirects', 422);
-      }
-      const location = response.headers.location;
-      if (!location || Array.isArray(location)) {
-        throw new AppError('DESTINATION_UNREACHABLE', 'Invalid redirect response', 422);
-      }
-      current = new URL(location, current);
-      continue;
-    }
+      let statusCode = response.statusCode;
+      let activeResponse = response;
 
-    if (statusCode !== 200) {
-      throw new AppError('DESTINATION_UNREACHABLE', 'Destination is not reachable', 422);
+      if (statusCode === 405 || statusCode === 501) {
+        const getResponse = await request(current.toString(), {
+          method: 'GET',
+          headers: { 'User-Agent': 'URLShortener-Validator/1.0' },
+          headersTimeout: config.urlValidationTimeout,
+          bodyTimeout: config.urlValidationTimeout,
+        });
+        statusCode = getResponse.statusCode;
+        activeResponse = getResponse;
+        await getResponse.body.dump();
+      } else {
+        await response.body.dump();
+      }
+
+      if ([301, 302, 303, 307, 308].includes(statusCode)) {
+        redirectCount++;
+        if (redirectCount > config.urlValidationRedirectLimit) {
+          throw new AppError('DESTINATION_UNREACHABLE', 'Too many redirects', 422);
+        }
+        const location = activeResponse.headers.location;
+        if (!location || Array.isArray(location)) {
+          throw new AppError('DESTINATION_UNREACHABLE', 'Invalid redirect response', 422);
+        }
+        current = new URL(location, current);
+        continue;
+      }
+
+      if (statusCode !== 200) {
+        throw new AppError('DESTINATION_UNREACHABLE', 'Destination must return HTTP 200', 422);
+      }
+      return;
     }
-    return;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(
+      'DESTINATION_UNREACHABLE',
+      'Could not reach this URL from our servers. Try a simpler URL or check that the site is publicly accessible.',
+      422
+    );
   }
 }
