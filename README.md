@@ -1,6 +1,6 @@
 # URL Shortener
 
-A full-stack URL shortener with user authentication, link management, click tracking, analytics, and automatic link health checks.
+A full-stack URL shortener with user authentication, link management, click tracking, analytics, and automatic link health checks and all
 
 ## Stack
 
