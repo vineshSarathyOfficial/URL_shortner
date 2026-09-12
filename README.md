@@ -1,34 +1,51 @@
-# URL Shortener
+# Snip — URL Shortener
 
-A full-stack URL shortener with user authentication, link management, click tracking, analytics, and automatic link health checks and all
+**Live app:** [urlshortner-vinedev.up.railway.app](https://urlshortner-vinedev.up.railway.app)
+
+A full-stack URL shortener with user authentication, link management, click analytics, and automatic link health checks. The React frontend is served by the Fastify API in production — one URL for the dashboard, API, and short-link redirects.
+
+## Features
+
+- **Instant shortening** — 6-character case-insensitive alphanumeric short codes
+- **Click analytics** — total clicks, daily trends, and recent access history per link
+- **Smart lifecycle** — links auto-deactivate after 30 days of inactivity; owners can reactivate with one click
+- **SSRF-safe validation** — destinations must be publicly reachable and return HTTP 200 (redirects followed)
+- **Daily health checks** — BullMQ worker marks dead destinations as inactive
+- **Atomic click tracking** — counter increments and access events logged in a single transaction
+- **Account management** — cascade delete removes all links when an account is deleted
 
 ## Stack
 
-- **Backend:** Node.js 20, Fastify, Prisma, TypeScript
-- **Task Queue:** BullMQ + Redis (daily link health checks)
-- **Database:** PostgreSQL
-- **Frontend:** React + Vite (served by the API in production)
-- **Auth:** JWT + Argon2id password hashing
+| Layer | Technology |
+|-------|------------|
+| Backend | Node.js 20, Fastify, Prisma, TypeScript |
+| Frontend | React, Vite (Clay-inspired UI) |
+| Database | PostgreSQL |
+| Queue | BullMQ + Redis |
+| Auth | JWT + Argon2id |
+| Hosting | Railway |
 
 ## Quick Start (local)
 
 ```bash
-# Start postgres and redis
+# Start Postgres and Redis
 docker compose up postgres redis -d
 
-# Terminal 1 - API
+# Terminal 1 — API
 cd backend && npm install && cp .env.example .env
 npx prisma migrate deploy && npm run dev
 
-# Terminal 2 - worker
+# Terminal 2 — worker (daily health checks)
 cd backend && npm run worker
 
-# Terminal 3 - frontend (dev with hot reload)
+# Terminal 3 — frontend (dev with hot reload)
 cd frontend && npm install && npm run dev
 ```
 
-- API: http://localhost:8000
-- Frontend (dev): http://localhost:5173
+| Service | URL |
+|---------|-----|
+| API | http://localhost:8000 |
+| Frontend (dev) | http://localhost:5173 |
 
 ### Production build (API serves frontend)
 
@@ -37,77 +54,77 @@ npm run build          # builds frontend into backend/public + compiles API
 cd backend && npm run start:prod
 ```
 
-Open http://localhost:8000 — dashboard and short links on the same URL.
+Open http://localhost:8000 — dashboard and short links on the same origin.
 
 ---
 
-## Deploy to Railway (recommended)
+## Deploy to Railway
 
-Everything runs on Railway: **Postgres + Redis + API (with frontend) + Worker**.
+Everything runs on Railway: **Postgres + Redis + Web (API + frontend) + Worker**.
 
 ### 1. Push to GitHub
 
 ```bash
-git init && git add . && git commit -m "Initial commit"
-# push to GitHub
+git add .
+git commit -m "Your message"
+git push origin main
 ```
 
 ### 2. Create Railway project
 
 1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
-2. Select your repo
+2. Select this repo
 
 ### 3. Add databases
 
-In the project, click **+ New** → **Database** → **PostgreSQL**  
-Click **+ New** → **Database** → **Redis**
+In the project canvas, click **+ New** twice:
+
+1. **Database** → **PostgreSQL**
+2. **Database** → **Redis**
 
 ### 4. Web service (API + frontend)
 
-Railway auto-creates a service from your repo. Configure it:
+Click the **GitHub repo service** (not Postgres or Redis) → **Variables**:
+
+| Variable | How to set |
+|----------|------------|
+| `DATABASE_URL` | **Add Reference** → Postgres → `DATABASE_URL` |
+| `REDIS_URL` | **Add Reference** → Redis → `REDIS_URL` |
+| `JWT_SECRET` | Raw value — generate with `openssl rand -base64 48` |
+| `APP_BASE_URL` | Your public Railway domain (set after step 5) |
+
+Do **not** set `PORT` — Railway injects it automatically.
+
+Build and start commands are in [`railway.toml`](railway.toml):
 
 | Setting | Value |
 |---------|-------|
-| **Build Command** | `cd backend && npm install && npm run build:full` |
-| **Start Command** | `cd backend && npm run start:prod` |
+| Build | `cd backend && npm install && npm run build:full` |
+| Start | `cd backend && npm run start:prod` |
 
-Or use the included [`railway.toml`](railway.toml) at the repo root.
+### 5. Generate a public domain
 
-**Environment variables:**
+1. GitHub service → **Settings** → **Networking** → **Public Networking**
+2. Click **Generate Domain** (port **8080** when prompted)
+3. Copy the URL (e.g. `https://urlshortner-vinedev.up.railway.app`)
+4. Add it to **Variables** as `APP_BASE_URL` (no trailing slash)
 
-| Variable | Value |
-|----------|-------|
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (reference from Postgres plugin) |
-| `REDIS_URL` | `${{Redis.REDIS_URL}}` (reference from Redis plugin) |
-| `JWT_SECRET` | long random string |
-| `APP_BASE_URL` | `https://<your-api-service>.up.railway.app` |
-| `PORT` | `8000` (or leave unset — Railway injects `PORT`) |
-
-> `CORS_ORIGINS` is optional when the frontend is served from the same service.
-
-Generate a public domain: service → **Settings** → **Networking** → **Generate Domain**.
-
-Set `APP_BASE_URL` to that domain (short links use this URL).
-
-### 5. Worker service
+### 6. Worker service
 
 1. **+ New** → **GitHub Repo** → same repo
-2. Name it `worker`
-
-| Setting | Value |
-|---------|-------|
-| **Build Command** | `cd backend && npm install && npm run build:full` |
-| **Start Command** | `cd backend && npm run worker:prod` |
-
-Use the **same environment variables** as the web service (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `APP_BASE_URL`).
+2. Rename the service to `worker`
+3. **Settings** → set **Start Command** to `cd backend && npm run worker:prod`
+4. Add the **same variables** as the web service
 
 See [`railway.worker.toml`](railway.worker.toml) for reference.
 
-### 6. Verify
+### 7. Verify
 
-- `https://your-app.up.railway.app` → landing page
-- `https://your-app.up.railway.app/api/health` → `{ "status": "ok" }`
-- Sign up, create a link, visit `https://your-app.up.railway.app/abc123`
+| URL | Expected |
+|-----|----------|
+| `https://your-app.up.railway.app` | Landing page |
+| `https://your-app.up.railway.app/api/health` | `{"status":"ok"}` |
+| Sign up → create link → visit `/{code}` | Redirect works |
 
 ### Railway architecture
 
@@ -115,8 +132,8 @@ See [`railway.worker.toml`](railway.worker.toml) for reference.
 Railway Project
 ├── postgres     (plugin)
 ├── redis        (plugin)
-├── api          (web)    → API + React SPA + short-link redirects
-└── worker       (worker) → daily health checks via BullMQ
+├── web          → API + React SPA + short-link redirects
+└── worker       → daily health checks via BullMQ
 ```
 
 ---
@@ -127,7 +144,7 @@ Railway Project
 docker compose up --build
 ```
 
-Builds frontend into the API image. API at http://localhost:8000.
+Builds the frontend into the API image. App at http://localhost:8000.
 
 ---
 
@@ -145,13 +162,18 @@ Builds frontend into the API image. API at http://localhost:8000.
 | DELETE | `/api/links/{id}` | Yes | Delete link |
 | POST | `/api/links/{id}/reactivate` | Yes | Reactivate link |
 | GET | `/api/links/{id}/analytics` | Yes | Link analytics |
+| GET | `/api/health` | No | Health check |
 | GET | `/{shortCode}` | No | Public redirect |
 
-## Features
+## Environment Variables
 
-- 6-character case-insensitive alphanumeric short codes
-- SSRF-safe URL validation (HTTP 200 final response required)
-- 30-day inactivity rule with owner reactivation
-- Daily BullMQ health checks mark dead destinations inactive
-- Atomic click counter with access event logging
-- Cascade delete on account removal
+See [`backend/.env.example`](backend/.env.example):
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string (`REDIS_PRIVATE_URL` also supported on Railway) |
+| `JWT_SECRET` | Secret for signing JWT tokens |
+| `APP_BASE_URL` | Public base URL for generated short links |
+| `CORS_ORIGINS` | Optional in dev; not needed when frontend is served by the API |
+| `PORT` | Server port (default `8000`; Railway sets this automatically) |
