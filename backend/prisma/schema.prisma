@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LinkStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique @db.VarChar(50)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  links        Link[]
+
+  @@map("users")
+}
+
+model Link {
+  id                  String            @id @default(uuid()) @db.Uuid
+  userId              String            @map("user_id") @db.Uuid
+  originalUrl         String            @map("original_url") @db.VarChar(2048)
+  shortCode           String            @unique @map("short_code") @db.VarChar(6)
+  clickCount          Int               @default(0) @map("click_count")
+  status              LinkStatus        @default(ACTIVE)
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  lastActivatedAt     DateTime?         @map("last_activated_at") @db.Timestamptz
+  deletedAt           DateTime?         @map("deleted_at") @db.Timestamptz
+  reactivatedAt       DateTime?         @map("reactivated_at") @db.Timestamptz
+  lastHealthCheckedAt DateTime?         @map("last_health_checked_at") @db.Timestamptz
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessEvents        LinkAccessEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("links")
+}
+
+model LinkAccessEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  linkId     String   @map("link_id") @db.Uuid
+  accessedAt DateTime @default(now()) @map("accessed_at") @db.Timestamptz
+  link       Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, accessedAt])
+  @@map("link_access_events")
+}

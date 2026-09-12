@@ -1,0 +1,13 @@
+{
+  "name": "url-shortener",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:worker": "cd backend && npm run worker",
+    "build": "cd backend && npm run build:full",
+    "test": "cd backend && npm test",
+    "db:migrate": "cd backend && npx prisma migrate deploy",
+    "db:studio": "cd backend && npx prisma studio"
+  }
+}
