@@ -49,8 +49,14 @@ export default function Dashboard() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this link?')) return;
-    await linksApi.delete(id);
-    setLinks((prev) => prev.filter((l) => l.id !== id));
+    setError('');
+    try {
+      await linksApi.delete(id);
+      setLinks((prev) => prev.filter((l) => l.id !== id));
+    } catch (err: unknown) {
+      const apiErr = err as { error?: { message?: string } };
+      setError(apiErr.error?.message || 'Failed to delete link');
+    }
   };
 
   const handleReactivate = async (id: string) => {

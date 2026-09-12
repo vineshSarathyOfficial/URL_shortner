@@ -25,6 +25,19 @@ await app.register(rateLimit, {
   global: false,
 });
 
+// Avoid 500s when clients send Content-Type: application/json with an empty body (e.g. DELETE).
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+  if (!body || (typeof body === 'string' && body.length === 0)) {
+    done(null, undefined);
+    return;
+  }
+  try {
+    done(null, JSON.parse(body as string));
+  } catch (err) {
+    done(err as Error, undefined);
+  }
+});
+
 app.setErrorHandler((error, _request, reply) => {
   if (error instanceof AppError) {
     return reply.status(error.statusCode).send(error.toJSON());

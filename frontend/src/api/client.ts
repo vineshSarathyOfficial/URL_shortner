@@ -27,9 +27,13 @@ export async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  const hasBody = options.body !== undefined && options.body !== null && options.body !== '';
+  if (hasBody && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const token = getToken();
   if (token) {
